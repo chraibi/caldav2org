@@ -11,7 +11,7 @@ org-calendar.
 Depends on [python-caldav](https://github.com/python-caldav/)
 
 ```bash
-python install -r requierements.txt
+python install -r requirements.txt
 ```
 
 ## User credentials
