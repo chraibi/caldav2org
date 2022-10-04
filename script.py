@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import configparser
 import sys
 from collections import defaultdict
@@ -6,8 +8,12 @@ from enum import Enum
 import logging
 import caldav
 from typing import TextIO
+import os
+
 
 logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
+dirname = os.path.dirname(__file__)
+config_file = os.path.join(dirname, 'config.cfg')
 
 
 class My(Enum):
@@ -37,7 +43,7 @@ def get_username_password() -> (str, str):
     """Return username and password"""
 
     confParser = configparser.ConfigParser()
-    confParser.read("./config.cfg")
+    confParser.read(config_file)
     try:
         username = confParser["calendar"]["username"]
         password = confParser["calendar"]["password"]
@@ -54,6 +60,7 @@ def get_username_password() -> (str, str):
 def org_datetime(s: str, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
     """Convert String to date"""
 
+    print(s)
     dt = datetime.strptime(s, "%Y%m%dT%H%M%S%fZ")
     return dt.astimezone(tz).strftime(Format)
 
@@ -142,11 +149,11 @@ def dump_in_file(meetings: defaultdict(list), org_file: TextIO) -> None:
     for key in sorted(meetings.keys()):
         for meeting in meetings[key]:
             if len(meeting) < 3:
-                logging.info(f"ERROR {meeting}")
+                logging.critical(f"Length of {meeting} < 3")
 
             title = meeting[2].replace("\\", " ")
             org_file.write(f"* {meeting[0]}\n")
-            org_file.write(f"** {meeting[1]}, {title}\n")
+            org_file.write(f"** CAL {meeting[1]}, {title}\n")
             org_file.write(f"SCHEDULED: {meeting[1]}\n")
 
 
