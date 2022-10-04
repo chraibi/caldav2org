@@ -32,8 +32,8 @@ class My(Enum):
     ]
     # Use shorter names in org-file
     calendars: dict = {
-        "IAS-7 (Arne Graf)": "IAS-7",
-        "IAS-7 PED simulation (Arne Graf)": "Division",
+        "IAS-7 (Arne Graf)": "Institute",
+        "IAS-7 PED simulation (Arne Graf)": "Division.",
     }
     # How many days in the future
     days: int = 14
@@ -60,7 +60,6 @@ def get_username_password() -> (str, str):
 def org_datetime(s: str, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
     """Convert String to date"""
 
-    print(s)
     dt = datetime.strptime(s, "%Y%m%dT%H%M%S%fZ")
     return dt.astimezone(tz).strftime(Format)
 
