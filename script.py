@@ -106,6 +106,34 @@ def fetch_calendar_meetings(calendar, start_time: datetime, end_time: datetime) 
     return events_fetched
 
 
+def add_meeting(meetings, start: str, summary: str, calendar_name: str) -> None:
+    """Add meeting if I am supposed to participate in it"""
+
+    org_start = org_datetime(start)
+    for meeting in My.meetings.value:
+        if meeting in summary:
+            logging.debug(f">> {summary} at {org_start} - {start}")
+            meetings[start].append([calendar_name, org_start, summary])
+
+
+def get_start(event: caldav.objects.Event) -> str:
+    """retrieve start of the meeting"""
+
+    if "DTSTART:" in event.data:
+        start = event.data.split("DTSTART:")[-1].split("\n")[0].strip()
+    else:
+        start = event.data.split("DTSTAMP:")[-1].split("\n")[0].strip()
+
+    return start
+
+
+def get_summary(event: caldav.objects.Event) -> str:
+    """retrieve title of the meeting"""
+
+    summary = event.data.split("SUMMARY:")[-1].split("\n")[0].strip()
+    return summary
+
+
 def get_my_meetings(events_fetched: list) -> defaultdict(list):
     """return relevant meetings (cal_name, org_start, summary)
 
@@ -116,20 +144,11 @@ def get_my_meetings(events_fetched: list) -> defaultdict(list):
     """
     meetings = defaultdict(list)
     for event in events_fetched:
+        logging.debug(f"{event.data}\n---------")
         calendar_name = My.calendars.value[event.parent.name]
-
-        if "DTSTART:" in event.data:
-            start = event.data.split("DTSTART:")[-1].split("\n")[0].strip()
-        else:
-            start = event.data.split("DTSTAMP:")[-1].split("\n")[0].strip()
-
-        summary = event.data.split("SUMMARY:")[-1].split("\n")[0].strip()
-        org_start = org_datetime(start)
-        for meeting in My.meetings.value:
-            if meeting in summary:
-                meetings[start].append([calendar_name, org_start, summary])
-                logging.debug(f"{event.data}\n---------")
-                logging.debug(f">> {summary} at {org_start} - {start}")
+        start = get_start(event)
+        summary = get_summary(event)
+        add_meeting(meetings, start, summary, calendar_name)
 
     return meetings
 
