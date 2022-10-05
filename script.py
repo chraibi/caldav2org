@@ -9,11 +9,24 @@ import logging
 import caldav
 from typing import TextIO
 import os
-
+from dataclasses import dataclass, field
 
 logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
 dirname = os.path.dirname(__file__)
-config_file = os.path.join(dirname, 'config.cfg')
+config_file = os.path.join(dirname, "config.cfg")
+
+
+@dataclass
+class Meeting:
+    """Definition of a Meeting."""
+
+    start: str
+    org_start: str = field(init=False)  # todo initialise this using start
+    summary: str
+    calendar_name: str
+
+    def __post_init__(self):
+        self.org_start = org_datetime(self.start)
 
 
 class My(Enum):
@@ -77,17 +90,8 @@ def get_principle() -> caldav.objects.Principal:
 
 
 def fetch_calendar_meetings(calendar, start_time: datetime, end_time: datetime) -> list:
-    """Fetch all events from calendar in time interval
+    """Fetch all events from calendar in time interval"""
 
-    :param calendar:
-    :type calendar:
-    :param start_time:
-    :type start_time: datetime
-    :param end_time:
-    :type end_time: datetime
-    :returns:
-
-    """
     logging.info(f"Get events from {start_time} to {end_time}")
     try:
         events_fetched = calendar.date_search(
@@ -106,14 +110,15 @@ def fetch_calendar_meetings(calendar, start_time: datetime, end_time: datetime) 
     return events_fetched
 
 
-def add_meeting(meetings, start: str, summary: str, calendar_name: str) -> None:
+def add_meeting(meetings, meeting: Meeting) -> None:
     """Add meeting if I am supposed to participate in it"""
 
-    org_start = org_datetime(start)
-    for meeting in My.meetings.value:
-        if meeting in summary:
-            logging.debug(f">> {summary} at {org_start} - {start}")
-            meetings[start].append([calendar_name, org_start, summary])
+    for m in My.meetings.value:
+        if m in meeting.summary:
+            logging.debug(
+                f">> {meeting.summary} at {meeting.org_start} - {meeting.start}"
+            )
+            meetings[meeting.start].append(meeting)
 
 
 def get_start(event: caldav.objects.Event) -> str:
@@ -148,31 +153,22 @@ def get_my_meetings(events_fetched: list) -> defaultdict(list):
         calendar_name = My.calendars.value[event.parent.name]
         start = get_start(event)
         summary = get_summary(event)
-        add_meeting(meetings, start, summary, calendar_name)
+        meeting = Meeting(start=start, summary=summary, calendar_name=calendar_name)
+        add_meeting(meetings, meeting)
 
     return meetings
 
 
 def dump_in_file(meetings: defaultdict(list), org_file: TextIO) -> None:
-    """Format meetings in an org-file and write in org_file
+    """Format meetings in an org-file and write in org_file"""
 
-    :param meetings:
-    :type meetings: defaultdict(list)
-    :param org_file:
-    :type org_file:
-    :returns:
-
-    """
     logging.info("Dump meetings in cal.org")
     for key in sorted(meetings.keys()):
         for meeting in meetings[key]:
-            if len(meeting) < 3:
-                logging.critical(f"Length of {meeting} < 3")
-
-            title = meeting[2].replace("\\", " ")
-            org_file.write(f"* {meeting[0]}\n")
-            org_file.write(f"** CAL {meeting[1]}, {title}\n")
-            org_file.write(f"SCHEDULED: {meeting[1]}\n")
+            title = meeting.summary.replace("\\", " ")
+            org_file.write(f"* {meeting.calendar_name}\n")
+            org_file.write(f"** CAL {meeting.org_start}, {title}\n")
+            org_file.write(f"SCHEDULED: {meeting.org_start}\n")
 
 
 def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
@@ -185,8 +181,6 @@ def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
         logging.info(f"process calender <{calendar_name}>")
         calendar = my_principal.calendar(calendar_name)
         events_fetched += fetch_calendar_meetings(calendar, today, end)
-        # datetime(2022, 10, 4) datetime(2023, 10, 15)
-        # todo from today to today + 14
 
     meetings = get_my_meetings(events_fetched)
     logging.info(f"Got {len(meetings)} from {len(events_fetched)} events.")
