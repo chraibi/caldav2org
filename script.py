@@ -10,6 +10,7 @@ import caldav
 from typing import TextIO
 import os
 from dataclasses import dataclass, field
+import pytz
 
 logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
 dirname = os.path.dirname(__file__)
@@ -26,7 +27,7 @@ class Meeting:
     calendar_name: str
 
     def __post_init__(self):
-        self.org_start = org_datetime(self.start)
+        self.org_start = org_datetime(self.start, tz=pytz.timezone('Europe/Berlin'))
 
 
 class My(Enum):
