@@ -18,16 +18,25 @@ config_file = os.path.join(dirname, "config.cfg")
 
 
 @dataclass
+class Config:
+    """Config data"""
+
+    username: str
+    password: str
+
+
+@dataclass
 class Meeting:
     """Definition of a Meeting."""
 
     start: str
-    org_start: str = field(init=False)  # todo initialise this using start
+    org_start: str = field(init=False)
     summary: str
     calendar_name: str
 
     def __post_init__(self):
-        self.org_start = org_datetime(self.start, tz=pytz.timezone('Europe/Berlin'))
+        # Should be Europe/Berlin!
+        self.org_start = org_datetime(self.start, tz=pytz.timezone("Europe/Samara"))
 
 
 class My(Enum):
@@ -53,7 +62,7 @@ class My(Enum):
     days: int = 14
 
 
-def get_username_password() -> (str, str):
+def get_username_password() -> Config:
     """Return username and password"""
 
     confParser = configparser.ConfigParser()
@@ -61,6 +70,7 @@ def get_username_password() -> (str, str):
     try:
         username = confParser["calendar"]["username"]
         password = confParser["calendar"]["password"]
+        config = Config(username, password)
     except Exception as e:
         logging.critical(
             f"""Can't parse the config file.
@@ -68,7 +78,7 @@ def get_username_password() -> (str, str):
         )
         sys.exit()
 
-    return username, password
+    return config
 
 
 def org_datetime(s: str, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
@@ -78,14 +88,15 @@ def org_datetime(s: str, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
     return dt.astimezone(tz).strftime(Format)
 
 
-def get_principle() -> caldav.objects.Principal:
+def get_principle(config: Config) -> caldav.objects.Principal:
     """Initialize principle with user, password and b2drop-url"""
 
     logging.info("Init principle ...")
-    username, password = get_username_password()
-    caldav_url = "https://b2drop.eudat.eu/remote.php/dav/calendars/" + username
+    caldav_url = "https://b2drop.eudat.eu/remote.php/dav/calendars/" + config.username
 
-    client = caldav.DAVClient(url=caldav_url, username=username, password=password)
+    client = caldav.DAVClient(
+        url=caldav_url, username=config.username, password=config.password
+    )
     logging.info("Done!")
     return client.principal()
 
@@ -189,7 +200,8 @@ def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
 
 
 if __name__ == "__main__":
-    my_principal = get_principle()
+    config = get_username_password()
+    my_principal = get_principle(config)
     with open("cal.org", "w") as org_file:
         logging.info("Start")
         main(my_principal, org_file)
