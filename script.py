@@ -1,28 +1,74 @@
-#!/usr/bin/env python3
+#!/usr/local/bin/python3
 
-import configparser
 import sys
-from collections import defaultdict
-from datetime import datetime, timedelta
-from enum import Enum
+import configparser
 import logging
-import caldav
-from typing import TextIO
-import os
+from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 import pytz
+from enum import Enum
+from pathlib import Path
+from typing import TextIO
+
+import caldav
 
 logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
-dirname = os.path.dirname(__file__)
-config_file = os.path.join(dirname, "config.cfg")
 
 
 @dataclass
 class Config:
     """Config data"""
 
-    username: str
-    password: str
+    username: str = field(init=False)
+    password: str = field(init=False)
+    dir_file: Path = field(
+        init=False,
+        default=Path("/Users/chraibi/Dropbox/Orgfiles/org-files/"),
+        metadata="The directory where the result file should go",
+    )
+    config_file: Path = field(
+        init=False,
+        default=Path(__file__).parent.absolute() / "config.cfg",
+        metadata="File containing password and username",
+    )
+    result_file: Path = field(
+        init=False, metadata="Orgfile containing the meetings. Does not change."
+    )
+
+    def set_username_password(self) -> (str, str):
+        """init Config's username and password"""
+
+        if not self.config_file.exists():
+            logging.error(f"{self.config.config_file} does not exist")
+            raise FileNotFoundError
+
+        try:
+            confParser = configparser.ConfigParser()
+            confParser.read(self.config_file)
+        except configparser.Error as error:
+            logging.error(f"Could not parse config file {self.config_file}")
+            sys.exit(error)
+
+        username = confParser["calendar"]["username"]
+        password = confParser["calendar"]["password"]
+        return (username, password)
+
+    def touch_file(self, filepath: Path) -> Path:
+        """Touch result file or delete if exists"""
+
+        if filepath.exists():
+            logging.info(f"file {filepath} exists. Delete")
+            filepath.unlink()
+            logging.info(f"check existance: {filepath.exists()}")
+
+        Path.touch(filepath)
+        return filepath
+
+    def __post_init__(self) -> None:
+        self.result_file = self.touch_file(Path("/Users/chraibi/Dropbox/Orgfiles/org-files/cal.org"))
+        
+        self.username, self.password = self.set_username_password()
 
 
 @dataclass
@@ -62,25 +108,6 @@ class My(Enum):
     days: int = 14
 
 
-def get_username_password() -> Config:
-    """Return username and password"""
-
-    confParser = configparser.ConfigParser()
-    confParser.read(config_file)
-    try:
-        username = confParser["calendar"]["username"]
-        password = confParser["calendar"]["password"]
-        config = Config(username, password)
-    except Exception as e:
-        logging.critical(
-            f"""Can't parse the config file.
-            Error: {e}"""
-        )
-        sys.exit()
-
-    return config
-
-
 def org_datetime(s: str, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
     """Convert String to date"""
 
@@ -101,7 +128,9 @@ def get_principle(config: Config) -> caldav.objects.Principal:
     return client.principal()
 
 
-def fetch_calendar_meetings(calendar, start_time: datetime, end_time: datetime) -> list:
+def fetch_calendar_meetings(
+    calendar: caldav.Calendar, start_time: datetime, end_time: datetime
+) -> list:
     """Fetch all events from calendar in time interval"""
 
     logging.info(f"Get events from {start_time} to {end_time}")
@@ -174,7 +203,7 @@ def get_my_meetings(events_fetched: list) -> defaultdict(list):
 def dump_in_file(meetings: defaultdict(list), org_file: TextIO) -> None:
     """Format meetings in an org-file and write in org_file"""
 
-    logging.info("Dump meetings in cal.org")
+    logging.info(f"Dump meetings in {org_file.name}")
     for key in sorted(meetings.keys()):
         for meeting in meetings[key]:
             title = meeting.summary.replace("\\", " ")
@@ -200,8 +229,8 @@ def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
 
 
 if __name__ == "__main__":
-    config = get_username_password()
+    config = Config()
     my_principal = get_principle(config)
-    with open("cal.org", "w") as org_file:
+    with open(config.result_file, "w") as org_file:
         logging.info("Start")
         main(my_principal, org_file)
