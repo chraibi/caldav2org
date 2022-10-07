@@ -20,16 +20,12 @@ logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
 class Config:
     """Config data"""
 
-    username: str = field(init=False)
-    password: str = field(init=False)
-    config_file: Path = field(
-        init=False,
-        default=Path(__file__).parent.absolute() / "config.cfg",
-        metadata="File containing password and username",
-    )
-    result_file: Path = field(
-        init=False, metadata="Orgfile containing the meetings. Does not change."
-    )
+    username: str = field(init=False, repr=False)
+    password: str = field(init=False, repr=False)
+    config_file: Path = field(init=False,
+                              repr=False,
+                              default=Path(__file__).parent.absolute() / "config.cfg")
+    result_file: Path = field(init=False)
 
     def set_username_password(self) -> (str, str):
         """init Config's username and password"""
