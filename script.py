@@ -22,11 +22,6 @@ class Config:
 
     username: str = field(init=False)
     password: str = field(init=False)
-    dir_file: Path = field(
-        init=False,
-        default=Path("/Users/chraibi/Dropbox/Orgfiles/org-files/"),
-        metadata="The directory where the result file should go",
-    )
     config_file: Path = field(
         init=False,
         default=Path(__file__).parent.absolute() / "config.cfg",
