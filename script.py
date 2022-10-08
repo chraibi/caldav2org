@@ -76,7 +76,7 @@ class Meeting:
         self.org_start = org_datetime(self.start, tz=pytz.timezone("Europe/Samara"))
 
 
-@dataclass(frozen=False)
+@dataclass(frozen=True)
 class Constants:
     """How to filter meetings, short names for calendars and days to fetch"""
 
@@ -91,21 +91,28 @@ class Constants:
     days: int = field(init=False, default=14)
 
     def __post_init__(self):
-        self.meetings = [
-            "MC",
-            "Mohcine",
-            "AL Runde",
-            "PRO Runde",
-            "Division Meeting Modeling",
-            "JuPedSim-Team",
-            "Journal Club",
-            "PhD workshop",
-        ]
-
-        self.calendars = {
-            "IAS-7 (Arne Graf)": "Institute",
-            "IAS-7 PED simulation (Arne Graf)": "Division.",
-        }
+        object.__setattr__(
+            self,
+            "meetings",
+            [
+                "MC",
+                "Mohcine",
+                "AL Runde",
+                "PRO Runde",
+                "Division Meeting Modeling",
+                "JuPedSim-Team",
+                "Journal Club",
+                "PhD workshop",
+            ],
+        )
+        object.__setattr__(
+            self,
+            "calendars",
+            {
+                "IAS-7 (Arne Graf)": "Institute",
+                "IAS-7 PED simulation (Arne Graf)": "Division.",
+            },
+        )
 
 
 def org_datetime(s, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
