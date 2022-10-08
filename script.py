@@ -6,7 +6,6 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from enum import Enum
 from pathlib import Path
 from typing import TextIO
 
@@ -18,12 +17,12 @@ logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
 
 @dataclass
 class Config:
-    """Config data"""
+    """Config data (creditentials, files, ...)"""
 
     username: str = field(init=False, repr=False)
     password: str = field(init=False, repr=False)
     config_file: Path = field(
-        init=False, repr=False, default=Path(__file__).parent.absolute() / "config.cfg"
+        init=False, default=Path(__file__).parent.absolute() / "config.cfg"
     )
     result_file: Path = field(init=False)
 
@@ -39,7 +38,7 @@ class Config:
             confParser.read(self.config_file)
         except configparser.Error as error:
             logging.error(f"Could not parse config file {self.config_file}")
-            sys.exit(error)
+            sys.exit(f"{error}")
 
         username = confParser["calendar"]["username"]
         password = confParser["calendar"]["password"]
@@ -77,27 +76,36 @@ class Meeting:
         self.org_start = org_datetime(self.start, tz=pytz.timezone("Europe/Samara"))
 
 
-class My(Enum):
+@dataclass(frozen=False)
+class Constants:
     """How to filter meetings, short names for calendars and days to fetch"""
 
     # Retrieve meetings with these keywords in title
-    meetings: list = [
-        "MC",
-        "Mohcine",
-        "AL Runde",
-        "PRO Runde",
-        "Division Meeting Modeling",
-        "JuPedSim-Team",
-        "Journal Club",
-        "PhD workshop",
-    ]
+    meetings: list = field(
+        init=False,
+        default_factory=list,
+    )
     # Use shorter names in org-file
-    calendars: dict = {
-        "IAS-7 (Arne Graf)": "Institute",
-        "IAS-7 PED simulation (Arne Graf)": "Division.",
-    }
+    calendars: dict = field(init=False, default_factory=dict)
     # How many days in the future
-    days: int = 14
+    days: int = field(init=False, default=14)
+
+    def __post_init__(self):
+        self.meetings = [
+            "MC",
+            "Mohcine",
+            "AL Runde",
+            "PRO Runde",
+            "Division Meeting Modeling",
+            "JuPedSim-Team",
+            "Journal Club",
+            "PhD workshop",
+        ]
+
+        self.calendars = {
+            "IAS-7 (Arne Graf)": "Institute",
+            "IAS-7 PED simulation (Arne Graf)": "Division.",
+        }
 
 
 def org_datetime(s, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
@@ -122,7 +130,7 @@ def get_principle(config: Config) -> caldav.objects.Principal:
 
 def fetch_calendar_meetings(
     calendar: caldav.Calendar, start_time: datetime, end_time: datetime
-) -> list[caldav.CalendarObjectResource]:
+) -> list[caldav.Event]:
     """Fetch all events from calendar in time interval"""
 
     logging.info(f"Get events from {start_time} to {end_time}")
@@ -146,7 +154,7 @@ def fetch_calendar_meetings(
 def add_meeting(meetings, meeting: Meeting) -> None:
     """Add meeting if I am supposed to participate in it"""
 
-    for m in My.meetings.value:
+    for m in My.meetings:
         if m in meeting.summary:
             logging.debug(
                 f">> {meeting.summary} at {meeting.org_start} - {meeting.start}"
@@ -173,17 +181,12 @@ def get_summary(event: caldav.objects.Event) -> str:
 
 
 def get_my_meetings(events_fetched: list) -> defaultdict:
-    """return relevant meetings (cal_name, org_start, summary)
+    """return relevant meetings (cal_name, org_start, summary)"""
 
-    :param events_fetched:
-    :type events_fetched: list) -> defaultdict(list)
-    :returns:
-
-    """
     meetings: defaultdict = defaultdict(list[Meeting])
     for event in events_fetched:
         logging.debug(f"{event.data}\n---------")
-        calendar_name = My.calendars.value[event.parent.name]
+        calendar_name = My.calendars[event.parent.name]
         start = get_start(event)
         summary = get_summary(event)
         meeting = Meeting(start=start, summary=summary, calendar_name=calendar_name)
@@ -209,8 +212,8 @@ def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
 
     events_fetched = []
     today = datetime.now()
-    end = today + timedelta(days=My.days.value)
-    for calendar_name in My.calendars.value:
+    end = today + timedelta(days=My.days)
+    for calendar_name in My.calendars:
         logging.info(f"process calender <{calendar_name}>")
         calendar = my_principal.calendar(calendar_name)
         events_fetched += fetch_calendar_meetings(calendar, today, end)
@@ -222,6 +225,7 @@ def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
 
 if __name__ == "__main__":
     config = Config()
+    My = Constants()
     my_principal = get_principle(config)
     with open(config.result_file, "w", encoding="utf-8") as org_file:
         logging.info("Start")
