@@ -1,17 +1,17 @@
 #!/usr/local/bin/python3
 
-import sys
 import configparser
 import logging
+import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import pytz
 from enum import Enum
 from pathlib import Path
 from typing import TextIO
 
 import caldav
+import pytz
 
 logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
 
@@ -22,16 +22,16 @@ class Config:
 
     username: str = field(init=False, repr=False)
     password: str = field(init=False, repr=False)
-    config_file: Path = field(init=False,
-                              repr=False,
-                              default=Path(__file__).parent.absolute() / "config.cfg")
+    config_file: Path = field(
+        init=False, repr=False, default=Path(__file__).parent.absolute() / "config.cfg"
+    )
     result_file: Path = field(init=False)
 
-    def set_username_password(self) -> (str, str):
+    def set_username_password(self) -> tuple[str, str]:
         """init Config's username and password"""
 
         if not self.config_file.exists():
-            logging.error(f"{self.config.config_file} does not exist")
+            logging.error(f"{self.config_file} does not exist")
             raise FileNotFoundError
 
         try:
@@ -57,8 +57,9 @@ class Config:
         return filepath
 
     def __post_init__(self) -> None:
-        self.result_file = self.touch_file(Path("/Users/chraibi/Dropbox/Orgfiles/org-files/cal.org"))
-        
+        self.result_file = self.touch_file(
+            Path("/Users/chraibi/Dropbox/Orgfiles/org-files/cal.org")
+        )
         self.username, self.password = self.set_username_password()
 
 
@@ -99,7 +100,7 @@ class My(Enum):
     days: int = 14
 
 
-def org_datetime(s: str, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
+def org_datetime(s, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
     """Convert String to date"""
 
     dt = datetime.strptime(s, "%Y%m%dT%H%M%S%fZ")
@@ -121,10 +122,11 @@ def get_principle(config: Config) -> caldav.objects.Principal:
 
 def fetch_calendar_meetings(
     calendar: caldav.Calendar, start_time: datetime, end_time: datetime
-) -> list:
+) -> list[caldav.CalendarObjectResource]:
     """Fetch all events from calendar in time interval"""
 
     logging.info(f"Get events from {start_time} to {end_time}")
+    events_fetched = []
     try:
         events_fetched = calendar.date_search(
             start=start_time,
@@ -137,7 +139,6 @@ def fetch_calendar_meetings(
             f"""Calendar server does not support expanded search.
             Error: {e}"""
         )
-        events_fetched = []
 
     return events_fetched
 
@@ -161,17 +162,17 @@ def get_start(event: caldav.objects.Event) -> str:
     else:
         start = event.data.split("DTSTAMP:")[-1].split("\n")[0].strip()
 
-    return start
+    return str(start)
 
 
 def get_summary(event: caldav.objects.Event) -> str:
     """retrieve title of the meeting"""
 
     summary = event.data.split("SUMMARY:")[-1].split("\n")[0].strip()
-    return summary
+    return str(summary)
 
 
-def get_my_meetings(events_fetched: list) -> defaultdict(list):
+def get_my_meetings(events_fetched: list) -> defaultdict:
     """return relevant meetings (cal_name, org_start, summary)
 
     :param events_fetched:
@@ -179,7 +180,7 @@ def get_my_meetings(events_fetched: list) -> defaultdict(list):
     :returns:
 
     """
-    meetings = defaultdict(list)
+    meetings: defaultdict = defaultdict(list[Meeting])
     for event in events_fetched:
         logging.debug(f"{event.data}\n---------")
         calendar_name = My.calendars.value[event.parent.name]
@@ -191,7 +192,7 @@ def get_my_meetings(events_fetched: list) -> defaultdict(list):
     return meetings
 
 
-def dump_in_file(meetings: defaultdict(list), org_file: TextIO) -> None:
+def dump_in_file(meetings: defaultdict, org_file: TextIO) -> None:
     """Format meetings in an org-file and write in org_file"""
 
     logging.info(f"Dump meetings in {org_file.name}")
@@ -222,6 +223,6 @@ def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
 if __name__ == "__main__":
     config = Config()
     my_principal = get_principle(config)
-    with open(config.result_file, "w") as org_file:
+    with open(config.result_file, "w", encoding="utf-8") as org_file:
         logging.info("Start")
         main(my_principal, org_file)
