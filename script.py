@@ -70,7 +70,7 @@ class Meeting:
     summary: str
     calendar_name: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Should be Europe/Berlin!
         self.org_start = org_datetime(self.start, tz=pytz.timezone("Europe/Samara"))
 
@@ -80,16 +80,16 @@ class Constants:
     """How to filter meetings, short names for calendars and days to fetch"""
 
     # Retrieve meetings with these keywords in title
-    meetings: list = field(
+    meetings: list[str] = field(
         init=False,
         default_factory=list,
     )
     # Use shorter names in org-file
-    calendars: dict = field(init=False, default_factory=dict)
+    calendars: dict[str, str] = field(init=False, default_factory=dict)
     # How many days in the future
     days: int = field(init=False, default=14)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         object.__setattr__(
             self,
             "meetings",
@@ -114,10 +114,12 @@ class Constants:
         )
 
 
-def org_datetime(s, tz=None, Format: str = "<%Y-%m-%d %a %H:%M>") -> str:
+def org_datetime(
+    start: str, tz: pytz.timezone = None, Format: str = "<%Y-%m-%d %a %H:%M>"
+) -> str:
     """Convert String to date"""
 
-    dt = datetime.strptime(s, "%Y%m%dT%H%M%S%fZ")
+    dt = datetime.strptime(start, "%Y%m%dT%H%M%S%fZ")
     return dt.astimezone(tz).strftime(Format)
 
 
@@ -157,7 +159,7 @@ def fetch_calendar_meetings(
     return events_fetched
 
 
-def add_meeting(meetings, meeting: Meeting) -> None:
+def add_meeting(meetings: defaultdict[str, list[Meeting]], meeting: Meeting) -> None:
     """Add meeting if I am supposed to participate in it"""
 
     for m in My.meetings:
@@ -186,10 +188,12 @@ def get_summary(event: caldav.objects.Event) -> str:
     return str(summary)
 
 
-def get_my_meetings(events_fetched: list) -> defaultdict:
+def get_my_meetings(
+    events_fetched: list[caldav.Event],
+) -> defaultdict[str, list[Meeting]]:
     """return relevant meetings (cal_name, org_start, summary)"""
 
-    meetings: defaultdict = defaultdict(list[Meeting])
+    meetings: defaultdict[str, list[Meeting]] = defaultdict(list[Meeting])
     for event in events_fetched:
         logging.debug(f"{event.data}\n---------")
         calendar_name = My.calendars[event.parent.name]
@@ -201,7 +205,7 @@ def get_my_meetings(events_fetched: list) -> defaultdict:
     return meetings
 
 
-def dump_in_file(meetings: defaultdict) -> None:
+def dump_in_file(meetings: defaultdict[str, list[Meeting]]) -> None:
     """Format meetings in an org-file and write in org_file"""
 
     logging.info(f"Dump meetings in {config.result_file}")
