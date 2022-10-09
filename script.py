@@ -7,7 +7,6 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TextIO
 
 import caldav
 import pytz
@@ -22,9 +21,11 @@ class Config:
     username: str = field(init=False, repr=False)
     password: str = field(init=False, repr=False)
     config_file: Path = field(
-        init=False, default=Path(__file__).parent.absolute() / "config.cfg"
+        init=True, default=Path(__file__).parent.absolute() / "config.cfg"
     )
-    result_file: Path = field(init=False)
+    result_file: Path = field(
+        init=True, default=Path("/Users/chraibi/Dropbox/Orgfiles/org-files/cal.org")
+    )
 
     def set_username_password(self) -> tuple[str, str]:
         """init Config's username and password"""
@@ -44,21 +45,19 @@ class Config:
         password = confParser["calendar"]["password"]
         return (username, password)
 
-    def touch_file(self, filepath: Path) -> Path:
-        """Touch result file or delete if exists"""
+    def touch_file(self, filepath: Path) -> None:
+        """Touch result file. Delete if exists"""
 
         if filepath.exists():
             logging.info(f"file {filepath} exists. Delete")
             filepath.unlink()
             logging.info(f"check existance: {filepath.exists()}")
 
+        logging.info(f"Touch : {filepath}")
         Path.touch(filepath)
-        return filepath
 
     def __post_init__(self) -> None:
-        self.result_file = self.touch_file(
-            Path("/Users/chraibi/Dropbox/Orgfiles/org-files/cal.org")
-        )
+        self.touch_file(self.result_file)
         self.username, self.password = self.set_username_password()
 
 
@@ -202,19 +201,19 @@ def get_my_meetings(events_fetched: list) -> defaultdict:
     return meetings
 
 
-def dump_in_file(meetings: defaultdict, org_file: TextIO) -> None:
+def dump_in_file(meetings: defaultdict) -> None:
     """Format meetings in an org-file and write in org_file"""
 
-    logging.info(f"Dump meetings in {org_file.name}")
+    logging.info(f"Dump meetings in {config.result_file}")
     for key in sorted(meetings.keys()):
         for meeting in meetings[key]:
             title = meeting.summary.replace("\\", " ")
-            org_file.write(f"* {meeting.calendar_name}\n")
-            org_file.write(f"** CAL {meeting.org_start}, {title}\n")
-            org_file.write(f"SCHEDULED: {meeting.org_start}\n")
+            config.result_file.write_text(f"* {meeting.calendar_name}\n")
+            config.result_file.write_text(f"** CAL {meeting.org_start}, {title}\n")
+            config.result_file.write_text(f"SCHEDULED: {meeting.org_start}\n")
 
 
-def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
+def main(my_principal: caldav.objects.Principal) -> None:
     """Init calender, fetch meetings, filter my meetings, dump in org-file"""
 
     events_fetched = []
@@ -227,13 +226,12 @@ def main(my_principal: caldav.objects.Principal, org_file: TextIO) -> None:
 
     meetings = get_my_meetings(events_fetched)
     logging.info(f"Got {len(meetings)} from {len(events_fetched)} events.")
-    dump_in_file(meetings, org_file)
+    dump_in_file(meetings)
 
 
 if __name__ == "__main__":
     config = Config()
     My = Constants()
     my_principal = get_principle(config)
-    with open(config.result_file, "w", encoding="utf-8") as org_file:
-        logging.info("Start")
-        main(my_principal, org_file)
+    logging.info("Start")
+    main(my_principal)
