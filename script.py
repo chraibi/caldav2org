@@ -5,9 +5,9 @@ import logging
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import tzinfo, datetime, timedelta
 from pathlib import Path
-
+from typing import Optional
 import caldav
 import pytz
 
@@ -115,7 +115,7 @@ class Constants:
 
 
 def org_datetime(
-    start: str, tz: pytz.timezone = None, Format: str = "<%Y-%m-%d %a %H:%M>"
+    start: str, tz: Optional[tzinfo] = None, Format: str = "<%Y-%m-%d %a %H:%M>"
 ) -> str:
     """Convert String to date"""
 
@@ -196,7 +196,8 @@ def get_my_meetings(
     meetings: defaultdict[str, list[Meeting]] = defaultdict(list[Meeting])
     for event in events_fetched:
         logging.debug(f"{event.data}\n---------")
-        calendar_name = My.calendars[event.parent.name]
+        cal_name = str(event.parent)
+        calendar_name = My.calendars[cal_name]
         start = get_start(event)
         summary = get_summary(event)
         meeting = Meeting(start=start, summary=summary, calendar_name=calendar_name)
@@ -209,12 +210,15 @@ def dump_in_file(meetings: defaultdict[str, list[Meeting]]) -> None:
     """Format meetings in an org-file and write in org_file"""
 
     logging.info(f"Dump meetings in {config.result_file}")
+    content = ""
     for key in sorted(meetings.keys()):
         for meeting in meetings[key]:
             title = meeting.summary.replace("\\", " ")
-            config.result_file.write_text(f"* {meeting.calendar_name}\n")
-            config.result_file.write_text(f"** CAL {meeting.org_start}, {title}\n")
-            config.result_file.write_text(f"SCHEDULED: {meeting.org_start}\n")
+            content += f"* {meeting.calendar_name}\n"
+            content += f"** CAL {meeting.org_start}, {title}\n"
+            content += f"SCHEDULED: {meeting.org_start}\n"
+
+    config.result_file.write_text(f"{content}")
 
 
 def main(my_principal: caldav.objects.Principal) -> None:
