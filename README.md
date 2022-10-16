@@ -23,5 +23,12 @@ with the following content:
 [calendar]
 username = your_username
 password = your_password
-```
+[my]
+meetings = keyword1,
+         keyword2,
+         keyword3
+         
+alias = Name of calendar: alias,
+        Name of calendar2: alias 2
 
+```
