@@ -16,19 +16,33 @@ logging.basicConfig(format="%(levelname)s - %(message)s", level=logging.INFO)
 
 @dataclass
 class Config:
-    """Config data (creditentials, files, ...)"""
+    """Config data (creditentials, files, ...)
 
+    Attributes:
+    result_file: the org-file with the meetings
+    username: username
+    password: password
+    meetings: keywords in meetings' titles
+    days: how many days in the future to retrieve meetings
+    calendars: a map of calendar names and shorter names.
+    """
+
+    result_file: Path = field(init=False, repr=False)
     username: str = field(init=False, repr=False)
     password: str = field(init=False, repr=False)
     config_file: Path = field(
         init=True, default=Path(__file__).parent.absolute() / "config.cfg"
     )
-    result_file: Path = field(
-        init=True, default=Path("/Users/chraibi/Dropbox/Orgfiles/org-files/cal.org")
+    meetings: list[str] = field(
+        init=False,
+        default_factory=list,
     )
+    calendars: dict[str, str] = field(init=False, default_factory=dict)
+    # How many days in the future
+    days: int = field(init=False, default=14)
 
-    def set_username_password(self) -> tuple[str, str]:
-        """init Config's username and password"""
+    def set_default_variables(self) -> tuple[str, str, Path, list, list]:
+        """init Config's username, password & result_file"""
 
         if not self.config_file.exists():
             logging.error(f"{self.config_file} does not exist")
@@ -43,7 +57,10 @@ class Config:
 
         username = confParser["calendar"]["username"]
         password = confParser["calendar"]["password"]
-        return (username, password)
+        result_file = Path(confParser["calendar"]["result_file"])
+        myMeetings = confParser.get("my", "meetings").split(",\n")
+        aliases = confParser.get("my", "alias").split(",\n")
+        return (username, password, result_file, myMeetings, aliases)
 
     def touch_file(self, filepath: Path) -> None:
         """Touch result file. Delete if exists"""
@@ -57,8 +74,19 @@ class Config:
         Path.touch(filepath)
 
     def __post_init__(self) -> None:
+        (
+            self.username,
+            self.password,
+            self.result_file,
+            self.meetings,
+            aliases,
+        ) = self.set_default_variables()
         self.touch_file(self.result_file)
-        self.username, self.password = self.set_username_password()
+        for alias in aliases:
+            alias_list = alias.split(":")
+            key = alias_list[0].strip()
+            value = alias_list[1].strip()
+            self.calendars[key] = value
 
 
 @dataclass
@@ -73,45 +101,6 @@ class Meeting:
     def __post_init__(self) -> None:
         # Should be Europe/Berlin!
         self.org_start = org_datetime(self.start, tz=pytz.timezone("Europe/Samara"))
-
-
-@dataclass(frozen=True)
-class Constants:
-    """How to filter meetings, short names for calendars and days to fetch"""
-
-    # Retrieve meetings with these keywords in title
-    meetings: list[str] = field(
-        init=False,
-        default_factory=list,
-    )
-    # Use shorter names in org-file
-    calendars: dict[str, str] = field(init=False, default_factory=dict)
-    # How many days in the future
-    days: int = field(init=False, default=14)
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "meetings",
-            [
-                "MC",
-                "Mohcine",
-                "AL Runde",
-                "PRO Runde",
-                "Division Meeting Modeling",
-                "JuPedSim-Team",
-                "Journal Club",
-                "PhD workshop",
-            ],
-        )
-        object.__setattr__(
-            self,
-            "calendars",
-            {
-                "IAS-7 (Arne Graf)": "Institute",
-                "IAS-7 PED simulation (Arne Graf)": "Division.",
-            },
-        )
 
 
 def org_datetime(
@@ -162,7 +151,7 @@ def fetch_calendar_meetings(
 def add_meeting(meetings: defaultdict[str, list[Meeting]], meeting: Meeting) -> None:
     """Add meeting if I am supposed to participate in it"""
 
-    for m in My.meetings:
+    for m in config.meetings:
         if m in meeting.summary:
             logging.debug(
                 f">> {meeting.summary} at {meeting.org_start} - {meeting.start}"
@@ -197,7 +186,7 @@ def get_my_meetings(
     for event in events_fetched:
         logging.debug(f"{event.data}\n---------")
         cal_name = str(event.parent)
-        calendar_name = My.calendars[cal_name]
+        calendar_name = config.calendars[cal_name]
         start = get_start(event)
         summary = get_summary(event)
         meeting = Meeting(start=start, summary=summary, calendar_name=calendar_name)
@@ -226,8 +215,8 @@ def main(my_principal: caldav.objects.Principal) -> None:
 
     events_fetched = []
     today = datetime.now()
-    end = today + timedelta(days=My.days)
-    for calendar_name in My.calendars:
+    end = today + timedelta(days=config.days)
+    for calendar_name in config.calendars:
         logging.info(f"process calender <{calendar_name}>")
         calendar = my_principal.calendar(calendar_name)
         events_fetched += fetch_calendar_meetings(calendar, today, end)
@@ -239,7 +228,6 @@ def main(my_principal: caldav.objects.Principal) -> None:
 
 if __name__ == "__main__":
     config = Config()
-    My = Constants()
     my_principal = get_principle(config)
     logging.info("Start")
     main(my_principal)
