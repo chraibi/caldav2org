@@ -5,9 +5,10 @@ import logging
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import tzinfo, datetime, timedelta
+from datetime import datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import Optional
+
 import caldav
 import pytz
 
@@ -100,16 +101,25 @@ class Meeting:
 
     def __post_init__(self) -> None:
         # Should be Europe/Berlin!
-        self.org_start = org_datetime(self.start, tz=pytz.timezone("Europe/Samara"))
+        self.org_start = org_datetime(self.start, tz=pytz.timezone("Europe/Sofia"))
 
 
 def org_datetime(
-    start: str, tz: Optional[tzinfo] = None, Format: str = "<%Y-%m-%d %a %H:%M>"
+    start: str,
+    tz: Optional[tzinfo] = None,
+    org_format: str = "<%Y-%m-%d %a %H:%M>",
+    date_format: str = "%Y%m%dT%H%M%S%fZ",
+    diff_days: int = 0,
 ) -> str:
     """Convert String to date"""
 
-    dt = datetime.strptime(start, "%Y%m%dT%H%M%S%fZ")
-    return dt.astimezone(tz).strftime(Format)
+    dt = datetime.strptime(start, date_format)
+    if diff_days:
+        # for some unknown reason, caldav returns  the last day of day-events PLUS 1
+        # So we have to substruct 1 day to get the right day!
+        dt = dt - timedelta(days=diff_days)
+
+    return dt.astimezone(tz).strftime(org_format)
 
 
 def get_principle(config: Config) -> caldav.objects.Principal:
@@ -159,14 +169,40 @@ def add_meeting(meetings: defaultdict[str, list[Meeting]], meeting: Meeting) -> 
             meetings[meeting.start].append(meeting)
 
 
+def is_day_event(event: caldav.objects.Event) -> bool:
+    """returns true if this event spands across a whole day or several days"""
+
+    if "DTSTART;VALUE=DATE:" in event.data:
+        return True
+
+    return False
+
+
+def get_meeting_day_span(event: caldav.objects.Event) -> tuple[str, str]:
+    """For day events return starting day and end day of meeting"""
+
+    start_day = event.data.split("DTSTART;VALUE=DATE:")[-1].split("\n")[0].strip()
+    end_day = event.data.split("DTEND;VALUE=DATE:")[-1].split("\n")[0].strip()
+    return (str(start_day), str(end_day))
+
+
 def get_start(event: caldav.objects.Event) -> str:
     """retrieve start of the meeting"""
-
+    logging.debug("get_start ---------------\n")
+    start = ""
     if "DTSTART:" in event.data:
-        start = event.data.split("DTSTART:")[-1].split("\n")[0].strip()
-    else:
-        start = event.data.split("DTSTAMP:")[-1].split("\n")[0].strip()
+        temptative_start = event.data.split("DTSTART:")
+        logging.debug(f"tempative {temptative_start}")
+        if temptative_start:
+            start = temptative_start[-1].split("\n")[0].strip()
+        else:
+            logging.error(f"Something is wrong with this meeting!\n{event.data}")
 
+    elif is_day_event(event):
+        start = event.data.split("DTSTART;VALUE=DATE:")[-1].split("\n")[0].strip()
+        start += "T000000Z"
+
+    logging.debug(f"get start return: {start}\n---------\n")
     return str(start)
 
 
@@ -174,6 +210,15 @@ def get_summary(event: caldav.objects.Event) -> str:
     """retrieve title of the meeting"""
 
     summary = event.data.split("SUMMARY:")[-1].split("\n")[0].strip()
+    if is_day_event(event):
+        start_day, end_day = get_meeting_day_span(event)
+        summary += ". From: " + org_datetime(
+            start_day, date_format="%Y%m%d", org_format="<%Y-%m-%d %a>"
+        )
+        summary += " To: " + org_datetime(
+            end_day, date_format="%Y%m%d", org_format="<%Y-%m-%d %a>", diff=1
+        )
+
     return str(summary)
 
 
@@ -184,7 +229,7 @@ def get_my_meetings(
 
     meetings: defaultdict[str, list[Meeting]] = defaultdict(list[Meeting])
     for event in events_fetched:
-        logging.debug(f"{event.data}\n---------")
+        logging.info(f"{event.data}\n---------")
         cal_name = str(event.parent)
         calendar_name = config.calendars[cal_name]
         start = get_start(event)
