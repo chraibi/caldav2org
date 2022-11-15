@@ -216,7 +216,7 @@ def get_summary(event: caldav.objects.Event) -> str:
             start_day, date_format="%Y%m%d", org_format="<%Y-%m-%d %a>"
         )
         summary += " To: " + org_datetime(
-            end_day, date_format="%Y%m%d", org_format="<%Y-%m-%d %a>", diff=1
+            end_day, date_format="%Y%m%d", org_format="<%Y-%m-%d %a>", diff_days=1
         )
 
     return str(summary)
