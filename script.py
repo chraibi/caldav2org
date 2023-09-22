@@ -250,7 +250,7 @@ def dump_in_file(meetings: defaultdict[str, list[Meeting]]) -> None:
             title = meeting.summary.replace("\\", " ")
             content += f"* {meeting.calendar_name}\n"
             content += f"** CAL {meeting.org_start}, {title}\n"
-            content += f"SCHEDULED: {meeting.org_start}\n"
+            content += f"DEADLINE: {meeting.org_start}\n"
 
     config.result_file.write_text(f"{content}")
 
